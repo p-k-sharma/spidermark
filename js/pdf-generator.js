@@ -192,11 +192,15 @@ const PdfGenerator = {
     try {
       const html = Preview.renderToHtml(item.content);
       const wrapper = this.createPdfWrapper(html);
+      document.body.appendChild(wrapper);
+
       const options = this.buildHtml2pdfOptions(filename);
 
       this.showProgress(40, 'Rendering...');
 
       await html2pdf().set(options).from(wrapper).save();
+
+      document.body.removeChild(wrapper);
 
       this.showProgress(100, 'Done!');
       this.onFirstPdf();
@@ -233,9 +237,13 @@ const PdfGenerator = {
 
         const html = Preview.renderToHtml(item.content);
         const wrapper = this.createPdfWrapper(html);
+        document.body.appendChild(wrapper);
+
         const options = this.buildHtml2pdfOptions(filename);
 
         const pdfBlob = await html2pdf().set(options).from(wrapper).outputPdf('blob');
+        document.body.removeChild(wrapper);
+
         zip.file(`${filename}.pdf`, pdfBlob);
       }
 
@@ -276,10 +284,14 @@ const PdfGenerator = {
       }).join('\n');
 
       const wrapper = this.createPdfWrapper(combinedHtml);
+      document.body.appendChild(wrapper);
+
       const options = this.buildHtml2pdfOptions(filename);
 
       this.showProgress(40, 'Rendering merged PDF...');
       await html2pdf().set(options).from(wrapper).save();
+
+      document.body.removeChild(wrapper);
 
       this.showProgress(100, 'Done!');
       this.onFirstPdf();
@@ -296,6 +308,12 @@ const PdfGenerator = {
 
   createPdfWrapper(html) {
     const div = document.createElement('div');
+    div.style.position = 'absolute';
+    div.style.left = '-9999px';
+    div.style.top = '0';
+    div.style.width = '210mm'; // Match A4 width for better rendering consistency
+    div.style.background = 'white';
+    div.style.color = 'black';
     div.innerHTML = this.buildPdfStyles() + html;
     return div;
   },
