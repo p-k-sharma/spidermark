@@ -1,8 +1,19 @@
 /* ============================================
    SpiderMark — PDF Generator Module
    ============================================
-   Uses iframe isolation to prevent html2canvas
-   from corrupting the main page during rendering.
+   Uses iframe isolation + forced repaint to prevent
+   html2canvas from corrupting the main page during
+   large-content PDF rendering.
+
+   Root cause: html2canvas creates a massive canvas
+   (scale:2) that exhausts Chrome's GPU compositor
+   memory, causing the main page to stop painting.
+   The DOM stays intact but nothing renders visually.
+
+   Fix: (1) Run html2pdf entirely inside a sandboxed
+   iframe via an inline <script> + postMessage, so the
+   main page DOM is never touched. (2) After generation,
+   force a display-toggle repaint and restore scroll.
    ============================================ */
 
 const PdfGenerator = {
@@ -32,10 +43,8 @@ const PdfGenerator = {
     this.progressText = document.getElementById('progress-text');
     this.filenameInput = document.getElementById('filename-input');
 
-    // Load saved settings
     this.settings = Utils.storage.get(this.SETTINGS_KEY, { ...this.defaultSettings });
 
-    // Bind buttons
     if (this.generateBtn) {
       this.generateBtn.addEventListener('click', () => this.generateSingle());
     }
@@ -49,7 +58,6 @@ const PdfGenerator = {
       this.settingsToggle.addEventListener('click', () => this.toggleSettings());
     }
 
-    // Bind setting inputs
     this.bindSettings();
     this.applySettingsToForm();
   },
@@ -152,129 +160,153 @@ const PdfGenerator = {
     `;
   },
 
-  /* ---- Iframe-based PDF Generation (core fix) ---- */
+  /* ---- Core: Iframe-isolated PDF Generation ---- */
 
   /**
-   * Generate a PDF blob from HTML content using an iframe for full isolation.
+   * Force Chrome to repaint the main page after html2canvas
+   * exhausts the GPU compositor's memory budget.
    *
-   * html2canvas clones the entire host document when rendering. For large
-   * content this corrupts the main page (scroll position, blank screen).
+   * html2canvas creates a canvas at 2x scale which, for large
+   * documents, can be thousands of pixels tall. Chrome's compositor
+   * drops the main page's paint layers to free GPU memory. The DOM
+   * is intact but nothing renders (appears as a blank white page).
    *
-   * Fix: create a same-origin iframe, write ONLY the styled HTML into it,
-   * load html2pdf.js inside the iframe, and run the conversion there.
-   * The main page DOM is never touched by html2canvas.
+   * The display:none → reflow → display:'' cycle forces Chrome to
+   * re-create all compositor layers, restoring the visual output.
+   */
+  forceRepaint() {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+
+    document.body.style.display = 'none';
+    void document.body.offsetHeight;         // force synchronous reflow
+    document.body.style.display = '';
+    void document.body.offsetHeight;         // second reflow to re-composite
+
+    // Restore scroll position (html2canvas may have moved it)
+    window.scrollTo(scrollX, scrollY);
+  },
+
+  /**
+   * Generate a PDF blob from rendered HTML using a fully sandboxed iframe.
    *
-   * Returns a Promise<Blob> of the generated PDF.
+   * Strategy:
+   *   1. Create a same-origin iframe with real dimensions (opacity:0).
+   *   2. Write the styled HTML + an inline <script> that loads html2pdf.js
+   *      and runs the conversion entirely inside the iframe.
+   *   3. The iframe posts the PDF as a base64 string back via postMessage.
+   *   4. Parent converts base64 → Blob and cleans up the iframe.
+   *
+   * Because html2pdf (and html2canvas) run inside the iframe's document,
+   * the main page's DOM is never cloned and scroll/paint state is preserved.
+   *
+   * @param {string} html  – Rendered HTML content (from Preview.renderToHtml)
+   * @param {string} filename – Base filename (without .pdf extension)
+   * @returns {Promise<Blob>} – The generated PDF as a Blob
    */
   generatePdfBlob(html, filename) {
+    const margin   = this.getMarginMm();
+    const styles   = this.buildPdfStyles();
+    const font     = this.getFontStack();
+    const fontSize = this.settings.fontSize;
+    const pageSize = this.settings.pageSize;
+    const orient   = this.settings.orientation;
+
     return new Promise((resolve, reject) => {
       const iframe = document.createElement('iframe');
-      // The iframe must have real dimensions — html2canvas needs a visible
-      // rendering area. We hide it visually with opacity + pointer-events.
+      // Real dimensions so html2canvas has a visible render target.
+      // opacity:0 hides it from the user; pointer-events:none makes it inert.
       iframe.style.cssText =
-        'position:fixed;left:0;top:0;width:210mm;height:100vh;' +
-        'opacity:0;pointer-events:none;z-index:-1;border:none;';
-      document.body.appendChild(iframe);
+        'position:fixed;left:0;top:0;width:794px;height:1123px;' +
+        'opacity:0;pointer-events:none;z-index:-9999;border:none;';
 
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-      const margin = this.getMarginMm();
+      /* -- message listener (receives PDF data from iframe) -- */
+      const onMessage = (event) => {
+        if (!event.data || event.data.type !== 'spidermark-pdf-result') return;
+        window.removeEventListener('message', onMessage);
+        cleanup();
 
-      // Write a self-contained HTML document into the iframe
-      iframeDoc.open();
-      iframeDoc.write(`<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  ${this.buildPdfStyles()}
-  <style>
-    html, body {
-      margin: 0; padding: 0;
-      width: 210mm;
-      background: white;
-      color: #1a1a2e;
-      font-family: ${this.getFontStack()};
-      font-size: ${this.settings.fontSize};
-      line-height: 1.7;
-    }
-    #pdf-content { padding: 20px; }
-  </style>
-</head>
-<body>
-  <div id="pdf-content">${html}</div>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
-</body>
-</html>`);
-      iframeDoc.close();
+        if (event.data.error) {
+          return reject(new Error(event.data.error));
+        }
 
-      // Wait for the iframe (and its script) to fully load
-      iframe.onload = () => {
-        // Small extra delay to let fonts / images settle
-        setTimeout(() => {
-          try {
-            const iframeWindow = iframe.contentWindow;
-            const target = iframeDoc.getElementById('pdf-content');
-
-            if (!target) {
-              document.body.removeChild(iframe);
-              return reject(new Error('Could not find #pdf-content in iframe'));
-            }
-
-            if (typeof iframeWindow.html2pdf === 'undefined') {
-              document.body.removeChild(iframe);
-              return reject(new Error('html2pdf not loaded in iframe'));
-            }
-
-            const options = {
-              margin: margin,
-              filename: filename + '.pdf',
-              image: { type: 'jpeg', quality: 0.98 },
-              html2canvas: {
-                scale: 2,
-                useCORS: true,
-                logging: false,
-                // Tell html2canvas the real content height
-                height: target.scrollHeight,
-                windowHeight: target.scrollHeight
-              },
-              jsPDF: {
-                unit: 'mm',
-                format: this.settings.pageSize,
-                orientation: this.settings.orientation
-              },
-              pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-            };
-
-            iframeWindow.html2pdf()
-              .set(options)
-              .from(target)
-              .outputPdf('blob')
-              .then((blob) => {
-                document.body.removeChild(iframe);
-                resolve(blob);
-              })
-              .catch((err) => {
-                document.body.removeChild(iframe);
-                reject(err);
-              });
-          } catch (err) {
-            document.body.removeChild(iframe);
-            reject(err);
-          }
-        }, 300);
+        // base64 → Uint8Array → Blob
+        const raw   = atob(event.data.pdfBase64);
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        resolve(new Blob([bytes], { type: 'application/pdf' }));
       };
+      window.addEventListener('message', onMessage);
 
-      iframe.onerror = () => {
-        document.body.removeChild(iframe);
-        reject(new Error('Iframe failed to load'));
-      };
+      /* -- safety timeout -- */
+      const timer = setTimeout(() => {
+        window.removeEventListener('message', onMessage);
+        cleanup();
+        reject(new Error('PDF generation timed out (30 s)'));
+      }, 30000);
 
-      // Safety timeout — if nothing happens in 30s, bail
-      setTimeout(() => {
+      function cleanup() {
+        clearTimeout(timer);
         if (document.body.contains(iframe)) {
           document.body.removeChild(iframe);
-          reject(new Error('PDF generation timed out'));
         }
-      }, 30000);
+      }
+
+      /* -- build the iframe document -- */
+      document.body.appendChild(iframe);
+      const iDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+      // We escape </script> inside the template to avoid prematurely closing the outer tag.
+      iDoc.open();
+      iDoc.write(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8">
+${styles}
+<style>
+html, body {
+  margin: 0; padding: 0;
+  background: white; color: #1a1a2e;
+  font-family: ${font};
+  font-size: ${fontSize};
+  line-height: 1.7;
+}
+#pdf-content { padding: 20px; }
+</style>
+</head>
+<body>
+<div id="pdf-content">${html}</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
+<script>
+window.addEventListener('load', function () {
+  setTimeout(function () {
+    var target = document.getElementById('pdf-content');
+    if (!target || typeof html2pdf === 'undefined') {
+      parent.postMessage({ type: 'spidermark-pdf-result', error: 'iframe setup failed' }, '*');
+      return;
+    }
+    html2pdf().set({
+      margin: ${margin},
+      filename: '${filename}.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: 'mm', format: '${pageSize}', orientation: '${orient}' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    })
+    .from(target)
+    .outputPdf('datauristring')
+    .then(function (dataUri) {
+      var b64 = dataUri.split(',')[1];
+      parent.postMessage({ type: 'spidermark-pdf-result', pdfBase64: b64 }, '*');
+    })
+    .catch(function (err) {
+      parent.postMessage({ type: 'spidermark-pdf-result', error: err.message || 'render failed' }, '*');
+    });
+  }, 400);   // allow fonts & images to settle
+});
+<\/script>
+</body>
+</html>`);
+      iDoc.close();
     });
   },
 
@@ -297,9 +329,12 @@ const PdfGenerator = {
 
     try {
       const html = Preview.renderToHtml(item.content);
-      this.showProgress(30, 'Rendering in isolated frame...');
+      this.showProgress(20, 'Rendering in isolated frame...');
 
       const blob = await this.generatePdfBlob(html, filename);
+
+      // Force repaint — html2canvas may have corrupted Chrome's compositor
+      this.forceRepaint();
 
       this.showProgress(90, 'Downloading...');
       this.downloadBlob(blob, filename + '.pdf');
@@ -308,6 +343,7 @@ const PdfGenerator = {
       this.onFirstPdf();
       Utils.showToast(`"${filename}.pdf" downloaded!`, { type: 'success' });
     } catch (err) {
+      this.forceRepaint();
       Utils.showToast(`PDF generation failed: ${err.message}`, { type: 'error' });
     } finally {
       this.isGenerating = false;
@@ -339,6 +375,10 @@ const PdfGenerator = {
 
         const html = Preview.renderToHtml(item.content);
         const pdfBlob = await this.generatePdfBlob(html, filename);
+
+        // Repaint between each PDF to keep the page responsive
+        this.forceRepaint();
+
         zip.file(`${filename}.pdf`, pdfBlob);
       }
 
@@ -350,6 +390,7 @@ const PdfGenerator = {
       this.onFirstPdf();
       Utils.showToast(`Downloaded ${items.length} PDFs as zip!`, { type: 'success' });
     } catch (err) {
+      this.forceRepaint();
       Utils.showToast(`Bulk generation failed: ${err.message}`, { type: 'error' });
     } finally {
       this.isGenerating = false;
@@ -377,9 +418,10 @@ const PdfGenerator = {
         return (i > 0 ? '<div class="page-break"></div>' : '') + html;
       }).join('\n');
 
-      this.showProgress(30, 'Rendering merged PDF...');
+      this.showProgress(20, 'Rendering merged PDF...');
 
       const blob = await this.generatePdfBlob(combinedHtml, filename);
+      this.forceRepaint();
 
       this.showProgress(90, 'Downloading...');
       this.downloadBlob(blob, filename + '.pdf');
@@ -388,6 +430,7 @@ const PdfGenerator = {
       this.onFirstPdf();
       Utils.showToast(`"${filename}.pdf" downloaded!`, { type: 'success' });
     } catch (err) {
+      this.forceRepaint();
       Utils.showToast(`Merged generation failed: ${err.message}`, { type: 'error' });
     } finally {
       this.isGenerating = false;
