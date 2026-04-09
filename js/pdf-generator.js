@@ -198,7 +198,7 @@ const PdfGenerator = {
 
       this.showProgress(40, 'Rendering...');
 
-      await html2pdf().set(options).from(wrapper).save();
+      await html2pdf().set(options).from(wrapper._inner).save();
 
       document.body.removeChild(wrapper);
 
@@ -241,7 +241,7 @@ const PdfGenerator = {
 
         const options = this.buildHtml2pdfOptions(filename);
 
-        const pdfBlob = await html2pdf().set(options).from(wrapper).outputPdf('blob');
+        const pdfBlob = await html2pdf().set(options).from(wrapper._inner).outputPdf('blob');
         document.body.removeChild(wrapper);
 
         zip.file(`${filename}.pdf`, pdfBlob);
@@ -289,7 +289,7 @@ const PdfGenerator = {
       const options = this.buildHtml2pdfOptions(filename);
 
       this.showProgress(40, 'Rendering merged PDF...');
-      await html2pdf().set(options).from(wrapper).save();
+      await html2pdf().set(options).from(wrapper._inner).save();
 
       document.body.removeChild(wrapper);
 
@@ -307,15 +307,32 @@ const PdfGenerator = {
   /* ---- Helpers ---- */
 
   createPdfWrapper(html) {
-    const div = document.createElement('div');
-    div.style.position = 'absolute';
-    div.style.left = '-9999px';
-    div.style.top = '0';
-    div.style.width = '210mm'; // Match A4 width for better rendering consistency
-    div.style.background = 'white';
-    div.style.color = 'black';
-    div.innerHTML = this.buildPdfStyles() + html;
-    return div;
+    // Outer container: hidden from view but still in the normal document flow
+    // so html2canvas can capture it (off-screen positioning causes blank renders)
+    const container = document.createElement('div');
+    container.style.position = 'fixed';
+    container.style.left = '0';
+    container.style.top = '0';
+    container.style.width = '0';
+    container.style.height = '0';
+    container.style.overflow = 'hidden';
+    container.style.zIndex = '-9999';
+    container.setAttribute('aria-hidden', 'true');
+
+    // Inner div: actual PDF content at A4 width, fully laid out for html2canvas
+    const inner = document.createElement('div');
+    inner.style.width = '210mm';
+    inner.style.padding = '0';
+    inner.style.background = 'white';
+    inner.style.color = '#1a1a2e';
+    inner.style.fontFamily = this.getFontStack();
+    inner.style.fontSize = this.settings.fontSize;
+    inner.style.lineHeight = '1.7';
+    inner.innerHTML = this.buildPdfStyles() + html;
+
+    container.appendChild(inner);
+    container._inner = inner; // store reference for html2pdf to use
+    return container;
   },
 
   downloadBlob(blob, filename) {
