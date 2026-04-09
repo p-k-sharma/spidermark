@@ -1,0 +1,154 @@
+/* ============================================
+   SpiderMark — Responsive Styles
+   ============================================ */
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-panel {
+    display: none;
+  }
+  .preview-panel.mobile-visible {
+    display: flex;
+  }
+  .editor-panel.mobile-hidden {
+    display: none;
+  }
+
+  .mobile-toggle {
+    display: flex;
+  }
+
+  .settings-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+
+  .action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .action-left, .action-right {
+    justify-content: center;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .main-container {
+    padding: 1rem;
+  }
+
+  .header {
+    padding: 0 1rem;
+  }
+
+  .logo-text {
+    font-size: 1.35rem;
+  }
+
+  .tab-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.82rem;
+  }
+  .tab-btn svg {
+    display: none;
+  }
+
+  .editor-textarea {
+    min-height: 300px;
+    font-size: 0.82rem;
+  }
+
+  .preview-content {
+    padding: 1rem;
+    min-height: 300px;
+  }
+
+  .editor-toolbar {
+    padding: 0.4rem;
+    gap: 1px;
+  }
+  .toolbar-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 0.75rem;
+  }
+
+  .file-upload-zone {
+    padding: 2rem 1rem;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filename-input {
+    width: 100%;
+  }
+
+  .action-left, .action-right {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .btn {
+    padding: 0.55rem 1rem;
+    font-size: 0.8rem;
+  }
+
+  .url-input-row {
+    flex-direction: column;
+  }
+  .url-input-row .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .scroll-top-btn {
+    left: 1rem;
+    bottom: 1rem;
+    width: 38px;
+    height: 38px;
+  }
+
+  .toast-container {
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+  }
+  .toast {
+    max-width: 100%;
+  }
+}
+
+/* Small mobile */
+@media (max-width: 480px) {
+  .header-right {
+    gap: 0.5rem;
+  }
+
+  .logo-text {
+    font-size: 1.15rem;
+  }
+
+  .theme-toggle {
+    width: 44px;
+    height: 24px;
+  }
+  .theme-toggle-knob {
+    width: 16px;
+    height: 16px;
+    font-size: 9px;
+  }
+  [data-theme="dark"] .theme-toggle-knob {
+    transform: translateX(20px);
+  }
+
+  .github-link svg {
+    width: 18px;
+    height: 18px;
+  }
+}

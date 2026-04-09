@@ -1,0 +1,250 @@
+/* ============================================
+   SpiderMark — Animations & Easter Eggs
+   ============================================ */
+
+/* Respect user preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* === Web Shoot Button Hover === */
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.4s, height 0.4s;
+}
+.btn-primary:hover::before {
+  width: 200px;
+  height: 200px;
+}
+
+/* === Tab Transition (Thwip Slide) === */
+.tab-panel {
+  animation: none;
+}
+.tab-panel.active {
+  animation: thwipSlide 0.35s var(--transition-ease);
+}
+@keyframes thwipSlide {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* === Drag Over Web Effect === */
+.file-upload-zone.drag-over::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 30%, rgba(226, 54, 54, 0.04) 70%);
+  pointer-events: none;
+  animation: webPulse 1.5s ease-in-out infinite;
+}
+@keyframes webPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* === Spider-Sense Shake === */
+@keyframes spiderSense {
+  0%, 100% { transform: translateX(0); box-shadow: 0 0 0 0 var(--spidey-gold-soft); }
+  10% { transform: translateX(-4px); }
+  20% { transform: translateX(4px); }
+  30% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  50% { transform: translateX(-2px); box-shadow: 0 0 20px 4px var(--spidey-gold-soft); }
+  60% { transform: translateX(2px); }
+  70% { transform: translateX(-1px); }
+  80% { transform: translateX(1px); }
+}
+.spider-sense {
+  animation: spiderSense 0.6s ease-in-out;
+  border-color: var(--spidey-gold) !important;
+}
+
+/* === Web Spin (Full page 360°) === */
+@keyframes webSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.web-spinning {
+  animation: webSpin 1.5s ease-in-out;
+  transform-origin: center center;
+}
+
+/* === Thwip Cursor Trail === */
+.thwip-trail {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  width: 4px;
+  height: 4px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8), 0 0 12px rgba(226, 54, 54, 0.4);
+}
+.thwip-line {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9998;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.8), transparent);
+  transform-origin: left center;
+  animation: thwipFade 0.6s ease-out forwards;
+}
+@keyframes thwipFade {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* === Konami Code — Comic Book Mode === */
+@keyframes comicPow {
+  0% { transform: scale(0) rotate(-15deg); opacity: 0; }
+  50% { transform: scale(1.2) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.comic-mode {
+  background-image: radial-gradient(circle, var(--text-muted) 1px, transparent 1px) !important;
+  background-size: 8px 8px !important;
+}
+
+.comic-label {
+  position: absolute;
+  font-family: 'Bebas Neue', 'Oswald', sans-serif;
+  font-size: 1rem;
+  color: var(--spidey-red);
+  background: var(--spidey-gold);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 2px solid #333;
+  z-index: 9999;
+  pointer-events: none;
+  animation: comicPow 0.4s ease-out;
+  transform: rotate(-5deg);
+  white-space: nowrap;
+}
+
+/* Spidey Swing across screen */
+.spidey-swing {
+  position: fixed;
+  z-index: 9999;
+  width: 60px;
+  height: 80px;
+  color: var(--spidey-red);
+  pointer-events: none;
+  animation: swingAcross 2s ease-in-out forwards;
+}
+@keyframes swingAcross {
+  0% { left: -80px; top: 10%; transform: rotate(-30deg); }
+  30% { top: 5%; transform: rotate(15deg); }
+  50% { top: 15%; transform: rotate(-10deg); }
+  70% { top: 8%; transform: rotate(10deg); }
+  100% { left: 110%; top: 12%; transform: rotate(-20deg); }
+}
+
+/* Web line that follows the swinging spidey */
+.spidey-web-line {
+  position: fixed;
+  z-index: 9998;
+  top: 0;
+  width: 1px;
+  background: var(--text-muted);
+  pointer-events: none;
+  opacity: 0.4;
+  transform-origin: top center;
+}
+
+/* === Spider-Verse Glitch === */
+@keyframes spiderVerseGlitch {
+  0% { text-shadow: 2px 0 #FF6EC7, -2px 0 #00FFFF; }
+  25% { text-shadow: -2px 1px #FF6EC7, 2px -1px #00FFFF; }
+  50% { text-shadow: 1px -2px #FF6EC7, -1px 2px #00FFFF; }
+  75% { text-shadow: -1px 2px #FF6EC7, 1px -2px #00FFFF; }
+  100% { text-shadow: 2px 0 #FF6EC7, -2px 0 #00FFFF; }
+}
+
+@keyframes spiderVerseColors {
+  0% { background-color: #0D0221; }
+  25% { background-color: #1A0A2E; }
+  50% { background-color: #0D1B2A; }
+  75% { background-color: #1B0A28; }
+  100% { background-color: #0D0221; }
+}
+
+.spiderverse-active {
+  animation: spiderVerseColors 2s ease-in-out infinite;
+}
+.spiderverse-active * {
+  animation: spiderVerseGlitch 0.15s ease-in-out infinite;
+}
+
+/* Halftone overlay for Spider-Verse */
+.halftone-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9997;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(255, 110, 199, 0.15) 1px, transparent 1px);
+  background-size: 4px 4px;
+  mix-blend-mode: screen;
+  animation: halftoneFlicker 0.3s steps(2) infinite;
+}
+@keyframes halftoneFlicker {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.3; }
+  100% { opacity: 0.6; }
+}
+
+/* === Upside Down Mode === */
+@keyframes flipUpsideDown {
+  0% { transform: rotate(0deg); }
+  30% { transform: rotate(180deg); }
+  70% { transform: rotate(180deg); }
+  100% { transform: rotate(360deg); }
+}
+.upside-down {
+  animation: flipUpsideDown 3s ease-in-out;
+}
+
+/* === Loading Spinner === */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* === Spidey Progress Walk === */
+@keyframes spideyWalk {
+  0% { transform: translateX(0) scaleX(1); }
+  50% { transform: translateX(5px) scaleX(-1); }
+  100% { transform: translateX(0) scaleX(1); }
+}
+.progress-spidey svg {
+  animation: spideyWalk 0.6s ease-in-out infinite;
+}
+
+/* === Fade In === */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in {
+  animation: fadeIn 0.4s var(--transition-ease);
+}

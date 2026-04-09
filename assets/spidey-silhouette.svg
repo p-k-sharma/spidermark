@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 120" fill="currentColor">
+  <!-- Head -->
+  <ellipse cx="40" cy="18" rx="12" ry="14"/>
+  <!-- Body -->
+  <path d="M28 30 Q26 50 30 65 L40 68 L50 65 Q54 50 52 30 Z"/>
+  <!-- Right arm extended (web-slinging pose) -->
+  <path d="M52 34 Q65 28 78 18 L76 22 Q64 32 52 38 Z"/>
+  <!-- Left arm down -->
+  <path d="M28 34 Q20 45 16 58 L20 58 Q24 46 30 38 Z"/>
+  <!-- Right leg -->
+  <path d="M44 65 Q50 85 52 105 L48 106 Q46 86 42 68 Z"/>
+  <!-- Left leg -->
+  <path d="M36 65 Q30 85 28 105 L32 106 Q34 86 38 68 Z"/>
+  <!-- Web line from right hand -->
+  <line x1="78" y1="18" x2="80" y2="0" stroke="currentColor" stroke-width="1.5" fill="none"/>
+  <!-- Eyes -->
+  <ellipse cx="35" cy="15" rx="4" ry="5" fill="white" opacity="0.9" transform="rotate(-8 35 15)"/>
+  <ellipse cx="45" cy="15" rx="4" ry="5" fill="white" opacity="0.9" transform="rotate(8 45 15)"/>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <circle cx="32" cy="28" r="10" fill="currentColor"/>
+  <circle cx="32" cy="42" r="14" fill="currentColor"/>
+  <!-- Legs -->
+  <path d="M22 28 Q10 20 4 10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M22 32 Q8 30 2 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M22 38 Q8 40 2 46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M22 42 Q10 48 4 56" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M42 28 Q54 20 60 10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M42 32 Q56 30 62 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M42 38 Q56 40 62 46" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M42 42 Q54 48 60 56" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <!-- Eyes -->
+  <ellipse cx="28" cy="26" rx="3" ry="4" fill="white" transform="rotate(-10 28 26)"/>
+  <ellipse cx="36" cy="26" rx="3" ry="4" fill="white" transform="rotate(10 36 26)"/>
+</svg>

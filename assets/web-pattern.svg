@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none" stroke="currentColor" stroke-width="0.5" opacity="0.06">
+  <!-- Radial lines -->
+  <line x1="100" y1="100" x2="100" y2="0"/>
+  <line x1="100" y1="100" x2="200" y2="0"/>
+  <line x1="100" y1="100" x2="200" y2="100"/>
+  <line x1="100" y1="100" x2="200" y2="200"/>
+  <line x1="100" y1="100" x2="100" y2="200"/>
+  <line x1="100" y1="100" x2="0" y2="200"/>
+  <line x1="100" y1="100" x2="0" y2="100"/>
+  <line x1="100" y1="100" x2="0" y2="0"/>
+  <!-- Concentric arcs -->
+  <circle cx="100" cy="100" r="25"/>
+  <circle cx="100" cy="100" r="50"/>
+  <circle cx="100" cy="100" r="75"/>
+  <circle cx="100" cy="100" r="100"/>
+</svg>

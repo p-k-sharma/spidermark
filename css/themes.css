@@ -1,0 +1,104 @@
+/* ============================================
+   SpiderMark — Theme Variables
+   Light Mode (default) + Dark Mode (Symbiote)
+   ============================================ */
+
+:root {
+  /* Spider-Man Core */
+  --spidey-red: #E23636;
+  --spidey-red-hover: #C92A2A;
+  --spidey-blue: #2B3784;
+  --spidey-blue-light: #3A4AA0;
+  --spidey-dark-blue: #0A0E27;
+  --spidey-web: #F0F0F0;
+  --spidey-gold: #FFD700;
+  --spidey-gold-soft: rgba(255, 215, 0, 0.15);
+
+  /* Light Mode */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F5F5F7;
+  --bg-tertiary: #EAEAEF;
+  --bg-editor: #FAFAFA;
+  --bg-card: #FFFFFF;
+  --bg-overlay: rgba(0, 0, 0, 0.4);
+
+  --text-primary: #1A1A2E;
+  --text-secondary: #4A4A6A;
+  --text-muted: #8888A0;
+  --text-inverse: #FFFFFF;
+
+  --border-color: #E0E0E8;
+  --border-focus: var(--spidey-red);
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
+
+  --code-bg: #F4F4F8;
+  --code-text: #E23636;
+
+  --btn-primary-bg: var(--spidey-red);
+  --btn-primary-text: #FFFFFF;
+  --btn-secondary-bg: var(--bg-tertiary);
+  --btn-secondary-text: var(--text-primary);
+
+  --accent: var(--spidey-red);
+  --accent-secondary: var(--spidey-blue);
+
+  --transition-speed: 0.3s;
+  --transition-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --scrollbar-thumb: #C0C0D0;
+  --scrollbar-track: var(--bg-secondary);
+
+  --toast-bg: var(--bg-card);
+  --toast-border: var(--border-color);
+}
+
+[data-theme="dark"] {
+  --bg-primary: #0A0E27;
+  --bg-secondary: #121629;
+  --bg-tertiary: #1A1E3A;
+  --bg-editor: #0E1230;
+  --bg-card: #141836;
+  --bg-overlay: rgba(0, 0, 0, 0.6);
+
+  --text-primary: #E8E8F0;
+  --text-secondary: #A0A0C0;
+  --text-muted: #606080;
+  --text-inverse: #0A0E27;
+
+  --border-color: #2A2A4A;
+  --border-focus: #7B68EE;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+
+  --code-bg: #1A1E3A;
+  --code-text: #7B68EE;
+
+  --btn-primary-bg: #7B68EE;
+  --btn-primary-text: #FFFFFF;
+  --btn-secondary-bg: var(--bg-tertiary);
+  --btn-secondary-text: var(--text-primary);
+
+  --accent: #7B68EE;
+  --accent-secondary: #5B4FCF;
+
+  --scrollbar-thumb: #2A2A4A;
+  --scrollbar-track: var(--bg-secondary);
+
+  --toast-bg: var(--bg-card);
+  --toast-border: var(--border-color);
+
+  --spidey-red: #FF4444;
+  --spidey-red-hover: #EE3333;
+}
+
+/* Spider-Verse Glitch Theme (temporary) */
+.spiderverse-active {
+  --bg-primary: #0D0221;
+  --text-primary: #FF6EC7;
+  --accent: #00FFFF;
+}
