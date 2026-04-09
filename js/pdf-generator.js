@@ -216,8 +216,11 @@ const PdfGenerator = {
       const iframe = document.createElement('iframe');
       // Real dimensions so html2canvas has a visible render target.
       // opacity:0 hides it from the user; pointer-events:none makes it inert.
+      // Start with a tall iframe so content isn't clipped during initial render.
+      // The inline script will measure the real content height and resize before
+      // html2canvas runs (html2canvas only captures what fits in the iframe viewport).
       iframe.style.cssText =
-        'position:fixed;left:0;top:0;width:794px;height:1123px;' +
+        'position:fixed;left:0;top:0;width:794px;height:50000px;' +
         'opacity:0;pointer-events:none;z-index:-9999;border:none;';
 
       /* -- message listener (receives PDF data from iframe) -- */
@@ -242,8 +245,8 @@ const PdfGenerator = {
       const timer = setTimeout(() => {
         window.removeEventListener('message', onMessage);
         cleanup();
-        reject(new Error('PDF generation timed out (30 s)'));
-      }, 30000);
+        reject(new Error('PDF generation timed out (60 s)'));
+      }, 60000);
 
       function cleanup() {
         clearTimeout(timer);
@@ -284,13 +287,32 @@ window.addEventListener('load', function () {
       parent.postMessage({ type: 'spidermark-pdf-result', error: 'iframe setup failed' }, '*');
       return;
     }
+
+    // Measure the full content height and resize the iframe to match.
+    // html2canvas can only capture what fits inside the iframe viewport,
+    // so we must ensure the iframe is at least as tall as the content.
+    var fullHeight = target.scrollHeight + 100;
+    document.documentElement.style.height = fullHeight + 'px';
+    document.body.style.height = fullHeight + 'px';
+    // Tell the parent to resize the iframe to match
+    if (parent !== window) {
+      try { frameElement.style.height = fullHeight + 'px'; } catch(e) {}
+    }
+
     html2pdf().set({
       margin: ${margin},
       filename: '${filename}.pdf',
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        height: fullHeight,
+        windowHeight: fullHeight,
+        scrollY: 0
+      },
       jsPDF: { unit: 'mm', format: '${pageSize}', orientation: '${orient}' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', 'pre', 'blockquote', 'img', 'h1', 'h2', 'h3', 'h4', 'li'] }
     })
     .from(target)
     .outputPdf('datauristring')
