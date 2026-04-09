@@ -127,14 +127,6 @@ const PdfGenerator = {
     return `
       <style>
         * { box-sizing: border-box; }
-        body {
-          font-family: ${this.getFontStack()};
-          font-size: ${this.settings.fontSize};
-          line-height: 1.7;
-          color: #1a1a2e;
-          max-width: 100%;
-          word-wrap: break-word;
-        }
         h1 { font-size: 2em; margin: 1em 0 0.5em; border-bottom: 2px solid #e0e0e8; padding-bottom: 0.3em; }
         h2 { font-size: 1.5em; margin: 0.8em 0 0.4em; }
         h3 { font-size: 1.25em; margin: 0.6em 0 0.3em; }
@@ -156,13 +148,22 @@ const PdfGenerator = {
     `;
   },
 
-  buildHtml2pdfOptions(filename) {
+  buildHtml2pdfOptions(filename, contentHeight) {
     const margin = this.getMarginMm();
+    const h2cOptions = { scale: 2, useCORS: true, logging: false };
+
+    // If content is inside a clipped container, we must tell html2canvas
+    // the real content height so it renders the full area.
+    if (contentHeight) {
+      h2cOptions.height = contentHeight;
+      h2cOptions.windowHeight = contentHeight;
+    }
+
     return {
       margin: margin,
       filename: filename + '.pdf',
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
+      html2canvas: h2cOptions,
       jsPDF: {
         unit: 'mm',
         format: this.settings.pageSize,
@@ -191,16 +192,15 @@ const PdfGenerator = {
 
     try {
       const html = Preview.renderToHtml(item.content);
-      const wrapper = this.createPdfWrapper(html);
-      document.body.appendChild(wrapper);
-
-      const options = this.buildHtml2pdfOptions(filename);
+      const { outer, inner } = this.createPdfWrapper(html);
+      document.body.appendChild(outer);
 
       this.showProgress(40, 'Rendering...');
 
-      await html2pdf().set(options).from(wrapper._inner).save();
+      const options = this.buildHtml2pdfOptions(filename, inner.scrollHeight);
+      await html2pdf().set(options).from(inner).save();
 
-      document.body.removeChild(wrapper);
+      document.body.removeChild(outer);
 
       this.showProgress(100, 'Done!');
       this.onFirstPdf();
@@ -236,14 +236,13 @@ const PdfGenerator = {
         this.showProgress(percent, `Generating ${filename}.pdf (${i + 1}/${items.length})...`);
 
         const html = Preview.renderToHtml(item.content);
-        const wrapper = this.createPdfWrapper(html);
-        document.body.appendChild(wrapper);
+        const { outer, inner } = this.createPdfWrapper(html);
+        document.body.appendChild(outer);
 
-        const options = this.buildHtml2pdfOptions(filename);
+        const options = this.buildHtml2pdfOptions(filename, inner.scrollHeight);
+        const pdfBlob = await html2pdf().set(options).from(inner).outputPdf('blob');
 
-        const pdfBlob = await html2pdf().set(options).from(wrapper._inner).outputPdf('blob');
-        document.body.removeChild(wrapper);
-
+        document.body.removeChild(outer);
         zip.file(`${filename}.pdf`, pdfBlob);
       }
 
@@ -277,21 +276,20 @@ const PdfGenerator = {
     this.showProgress(0, 'Merging documents...');
 
     try {
-      // Combine all markdown with page breaks
       const combinedHtml = items.map((item, i) => {
         const html = Preview.renderToHtml(item.content);
         return (i > 0 ? '<div class="page-break"></div>' : '') + html;
       }).join('\n');
 
-      const wrapper = this.createPdfWrapper(combinedHtml);
-      document.body.appendChild(wrapper);
-
-      const options = this.buildHtml2pdfOptions(filename);
+      const { outer, inner } = this.createPdfWrapper(combinedHtml);
+      document.body.appendChild(outer);
 
       this.showProgress(40, 'Rendering merged PDF...');
-      await html2pdf().set(options).from(wrapper._inner).save();
 
-      document.body.removeChild(wrapper);
+      const options = this.buildHtml2pdfOptions(filename, inner.scrollHeight);
+      await html2pdf().set(options).from(inner).save();
+
+      document.body.removeChild(outer);
 
       this.showProgress(100, 'Done!');
       this.onFirstPdf();
@@ -306,23 +304,32 @@ const PdfGenerator = {
 
   /* ---- Helpers ---- */
 
+  /**
+   * Create a styled wrapper for PDF generation.
+   *
+   * html2canvas can only capture elements that are in the normal document flow.
+   * Off-screen positioning (left:-9999px), visibility:hidden, or display:none
+   * all produce blank captures. position:fixed causes rendering timeouts.
+   *
+   * Strategy: An outer div with `height:0; overflow:hidden` hides the content
+   * from the user. The inner div has the full styled content at A4 width.
+   * We pass the inner div to html2pdf along with explicit height/windowHeight
+   * options so html2canvas knows the true content dimensions despite the clip.
+   *
+   * Returns { outer, inner } so callers can append outer to DOM and pass
+   * inner to html2pdf.
+   */
   createPdfWrapper(html) {
-    // Outer container: hidden from view but still in the normal document flow
-    // so html2canvas can capture it (off-screen positioning causes blank renders)
-    const container = document.createElement('div');
-    container.style.position = 'fixed';
-    container.style.left = '0';
-    container.style.top = '0';
-    container.style.width = '0';
-    container.style.height = '0';
-    container.style.overflow = 'hidden';
-    container.style.zIndex = '-9999';
-    container.setAttribute('aria-hidden', 'true');
+    // Outer: zero-height overflow-hidden — invisible to the user
+    const outer = document.createElement('div');
+    outer.style.height = '0';
+    outer.style.overflow = 'hidden';
+    outer.setAttribute('aria-hidden', 'true');
 
-    // Inner div: actual PDF content at A4 width, fully laid out for html2canvas
+    // Inner: full styled content at A4 width
     const inner = document.createElement('div');
     inner.style.width = '210mm';
-    inner.style.padding = '0';
+    inner.style.padding = '20px';
     inner.style.background = 'white';
     inner.style.color = '#1a1a2e';
     inner.style.fontFamily = this.getFontStack();
@@ -330,9 +337,8 @@ const PdfGenerator = {
     inner.style.lineHeight = '1.7';
     inner.innerHTML = this.buildPdfStyles() + html;
 
-    container.appendChild(inner);
-    container._inner = inner; // store reference for html2pdf to use
-    return container;
+    outer.appendChild(inner);
+    return { outer, inner };
   },
 
   downloadBlob(blob, filename) {
@@ -363,7 +369,6 @@ const PdfGenerator = {
   },
 
   triggerSpiderSense() {
-    // Shake the generate button
     if (this.generateBtn) {
       this.generateBtn.classList.add('spider-sense');
       setTimeout(() => this.generateBtn.classList.remove('spider-sense'), 700);
