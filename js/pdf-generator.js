@@ -1,5 +1,8 @@
 /* ============================================
    SpiderMark — PDF Generator Module
+   ============================================
+   Uses iframe isolation to prevent html2canvas
+   from corrupting the main page during rendering.
    ============================================ */
 
 const PdfGenerator = {
@@ -127,6 +130,7 @@ const PdfGenerator = {
     return `
       <style>
         * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; background: white; }
         h1 { font-size: 2em; margin: 1em 0 0.5em; border-bottom: 2px solid #e0e0e8; padding-bottom: 0.3em; }
         h2 { font-size: 1.5em; margin: 0.8em 0 0.4em; }
         h3 { font-size: 1.25em; margin: 0.6em 0 0.3em; }
@@ -148,29 +152,130 @@ const PdfGenerator = {
     `;
   },
 
-  buildHtml2pdfOptions(filename, contentHeight) {
-    const margin = this.getMarginMm();
-    const h2cOptions = { scale: 2, useCORS: true, logging: false };
+  /* ---- Iframe-based PDF Generation (core fix) ---- */
 
-    // If content is inside a clipped container, we must tell html2canvas
-    // the real content height so it renders the full area.
-    if (contentHeight) {
-      h2cOptions.height = contentHeight;
-      h2cOptions.windowHeight = contentHeight;
+  /**
+   * Generate a PDF blob from HTML content using an iframe for full isolation.
+   *
+   * html2canvas clones the entire host document when rendering. For large
+   * content this corrupts the main page (scroll position, blank screen).
+   *
+   * Fix: create a same-origin iframe, write ONLY the styled HTML into it,
+   * load html2pdf.js inside the iframe, and run the conversion there.
+   * The main page DOM is never touched by html2canvas.
+   *
+   * Returns a Promise<Blob> of the generated PDF.
+   */
+  generatePdfBlob(html, filename) {
+    return new Promise((resolve, reject) => {
+      const iframe = document.createElement('iframe');
+      // The iframe must have real dimensions — html2canvas needs a visible
+      // rendering area. We hide it visually with opacity + pointer-events.
+      iframe.style.cssText =
+        'position:fixed;left:0;top:0;width:210mm;height:100vh;' +
+        'opacity:0;pointer-events:none;z-index:-1;border:none;';
+      document.body.appendChild(iframe);
+
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      const margin = this.getMarginMm();
+
+      // Write a self-contained HTML document into the iframe
+      iframeDoc.open();
+      iframeDoc.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  ${this.buildPdfStyles()}
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      width: 210mm;
+      background: white;
+      color: #1a1a2e;
+      font-family: ${this.getFontStack()};
+      font-size: ${this.settings.fontSize};
+      line-height: 1.7;
     }
+    #pdf-content { padding: 20px; }
+  </style>
+</head>
+<body>
+  <div id="pdf-content">${html}</div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"><\/script>
+</body>
+</html>`);
+      iframeDoc.close();
 
-    return {
-      margin: margin,
-      filename: filename + '.pdf',
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: h2cOptions,
-      jsPDF: {
-        unit: 'mm',
-        format: this.settings.pageSize,
-        orientation: this.settings.orientation
-      },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-    };
+      // Wait for the iframe (and its script) to fully load
+      iframe.onload = () => {
+        // Small extra delay to let fonts / images settle
+        setTimeout(() => {
+          try {
+            const iframeWindow = iframe.contentWindow;
+            const target = iframeDoc.getElementById('pdf-content');
+
+            if (!target) {
+              document.body.removeChild(iframe);
+              return reject(new Error('Could not find #pdf-content in iframe'));
+            }
+
+            if (typeof iframeWindow.html2pdf === 'undefined') {
+              document.body.removeChild(iframe);
+              return reject(new Error('html2pdf not loaded in iframe'));
+            }
+
+            const options = {
+              margin: margin,
+              filename: filename + '.pdf',
+              image: { type: 'jpeg', quality: 0.98 },
+              html2canvas: {
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                // Tell html2canvas the real content height
+                height: target.scrollHeight,
+                windowHeight: target.scrollHeight
+              },
+              jsPDF: {
+                unit: 'mm',
+                format: this.settings.pageSize,
+                orientation: this.settings.orientation
+              },
+              pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+
+            iframeWindow.html2pdf()
+              .set(options)
+              .from(target)
+              .outputPdf('blob')
+              .then((blob) => {
+                document.body.removeChild(iframe);
+                resolve(blob);
+              })
+              .catch((err) => {
+                document.body.removeChild(iframe);
+                reject(err);
+              });
+          } catch (err) {
+            document.body.removeChild(iframe);
+            reject(err);
+          }
+        }, 300);
+      };
+
+      iframe.onerror = () => {
+        document.body.removeChild(iframe);
+        reject(new Error('Iframe failed to load'));
+      };
+
+      // Safety timeout — if nothing happens in 30s, bail
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+          reject(new Error('PDF generation timed out'));
+        }
+      }, 30000);
+    });
   },
 
   /* ---- Generation Methods ---- */
@@ -192,15 +297,12 @@ const PdfGenerator = {
 
     try {
       const html = Preview.renderToHtml(item.content);
-      const { outer, inner } = this.createPdfWrapper(html);
-      document.body.appendChild(outer);
+      this.showProgress(30, 'Rendering in isolated frame...');
 
-      this.showProgress(40, 'Rendering...');
+      const blob = await this.generatePdfBlob(html, filename);
 
-      const options = this.buildHtml2pdfOptions(filename, inner.scrollHeight);
-      await html2pdf().set(options).from(inner).save();
-
-      document.body.removeChild(outer);
+      this.showProgress(90, 'Downloading...');
+      this.downloadBlob(blob, filename + '.pdf');
 
       this.showProgress(100, 'Done!');
       this.onFirstPdf();
@@ -236,13 +338,7 @@ const PdfGenerator = {
         this.showProgress(percent, `Generating ${filename}.pdf (${i + 1}/${items.length})...`);
 
         const html = Preview.renderToHtml(item.content);
-        const { outer, inner } = this.createPdfWrapper(html);
-        document.body.appendChild(outer);
-
-        const options = this.buildHtml2pdfOptions(filename, inner.scrollHeight);
-        const pdfBlob = await html2pdf().set(options).from(inner).outputPdf('blob');
-
-        document.body.removeChild(outer);
+        const pdfBlob = await this.generatePdfBlob(html, filename);
         zip.file(`${filename}.pdf`, pdfBlob);
       }
 
@@ -281,15 +377,12 @@ const PdfGenerator = {
         return (i > 0 ? '<div class="page-break"></div>' : '') + html;
       }).join('\n');
 
-      const { outer, inner } = this.createPdfWrapper(combinedHtml);
-      document.body.appendChild(outer);
+      this.showProgress(30, 'Rendering merged PDF...');
 
-      this.showProgress(40, 'Rendering merged PDF...');
+      const blob = await this.generatePdfBlob(combinedHtml, filename);
 
-      const options = this.buildHtml2pdfOptions(filename, inner.scrollHeight);
-      await html2pdf().set(options).from(inner).save();
-
-      document.body.removeChild(outer);
+      this.showProgress(90, 'Downloading...');
+      this.downloadBlob(blob, filename + '.pdf');
 
       this.showProgress(100, 'Done!');
       this.onFirstPdf();
@@ -303,43 +396,6 @@ const PdfGenerator = {
   },
 
   /* ---- Helpers ---- */
-
-  /**
-   * Create a styled wrapper for PDF generation.
-   *
-   * html2canvas can only capture elements that are in the normal document flow.
-   * Off-screen positioning (left:-9999px), visibility:hidden, or display:none
-   * all produce blank captures. position:fixed causes rendering timeouts.
-   *
-   * Strategy: An outer div with `height:0; overflow:hidden` hides the content
-   * from the user. The inner div has the full styled content at A4 width.
-   * We pass the inner div to html2pdf along with explicit height/windowHeight
-   * options so html2canvas knows the true content dimensions despite the clip.
-   *
-   * Returns { outer, inner } so callers can append outer to DOM and pass
-   * inner to html2pdf.
-   */
-  createPdfWrapper(html) {
-    // Outer: zero-height overflow-hidden — invisible to the user
-    const outer = document.createElement('div');
-    outer.style.height = '0';
-    outer.style.overflow = 'hidden';
-    outer.setAttribute('aria-hidden', 'true');
-
-    // Inner: full styled content at A4 width
-    const inner = document.createElement('div');
-    inner.style.width = '210mm';
-    inner.style.padding = '20px';
-    inner.style.background = 'white';
-    inner.style.color = '#1a1a2e';
-    inner.style.fontFamily = this.getFontStack();
-    inner.style.fontSize = this.settings.fontSize;
-    inner.style.lineHeight = '1.7';
-    inner.innerHTML = this.buildPdfStyles() + html;
-
-    outer.appendChild(inner);
-    return { outer, inner };
-  },
 
   downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
